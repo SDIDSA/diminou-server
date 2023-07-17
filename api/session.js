@@ -12,10 +12,11 @@ class Session extends Route {
             res.send({ user : user_id });
         });
 
-        this.addEntry("getForId", async (req, res) => {
+        this.addEntry("getForId", async (req, res, user_id) => {
+            let type = req.body.type;
             let bean = (await this.select({
                 select: ["*"],
-                from: [req.body.type],
+                from: [type],
                 where: {
                     keys: ["id"],
                     values: [req.body.id]
@@ -24,6 +25,34 @@ class Session extends Route {
 
             if(bean.password != undefined) {
                 bean.password = "- UNAUTHORIZED ACCESS -"
+            }
+
+            if(type.toLowerCase() === "user") {
+                if(user_id == bean.id) {
+                    bean.friend = "self";
+                } else {
+                    let other_id = bean.id;
+                    let friend = await this.select({
+                        select : ["*"],
+                        from: ["friend"],
+                        where: {
+                            keys : [["sender", "receiver"], ["sender", "receiver"]],
+                            values : [other_id, user_id, user_id, other_id],
+                            op : ["AND", "OR", "AND"]
+                        }
+                    });
+                    if(friend.length == 0) {
+                        bean.friend = "none";
+                    }else if(!friend[0].accepted) {
+                        if(friend[0].sender == user_id) {
+                            bean.friend = "pending_sent";
+                        }else {
+                            bean.friend = "pending_received";
+                        }
+                    }else {
+                        bean.friend = "friend";
+                    }
+                }
             }
 
             res.send(bean);
@@ -110,12 +139,12 @@ class Session extends Route {
                 where: {
                     keys : ["accepted", ["sender", "receiver"]],
                     values : [true, user_id, user_id],
-                    op : ["AND", ["OR"]]
+                    op : ["AND", "OR"]
                 }
             })
             let toSend = [];
             friends.forEach(friend => {
-                toSend.push(friend.sender === user_id ? friend.received : friend.sender);
+                toSend.push(friend.sender === user_id ? friend.receiver : friend.sender);
             });
 
             res.send({friends : toSend});
@@ -132,7 +161,7 @@ class Session extends Route {
                 }
             })
 
-            res.send({friends : friends.map(u => u.sender)});
+            res.send({requests : friends.map(u => u.sender)});
         });
         
         this.addEntry("getSentRequests", async (req, res, user_id) => {
@@ -146,25 +175,84 @@ class Session extends Route {
                 }
             })
 
-            res.send({friends : friends.map(u => u.sender)});
+            res.send({requests : friends.map(u => u.receiver)});
         });
         
+        this.addEntry("getForUsername", async (req, res, user_id) => {
+            let matches = await this.select({
+                select : ["id"],
+                from: ["user"],
+                where: {
+                    keys : [{like : "username"}, {not : "id"}],
+                    values : [{like : req.body.username}, user_id],
+                    op: ["AND"]
+                },
+                limit: 4
+            })
+
+            res.send({matches : matches.map(u => u.id)});
+        });
+
         this.addEntry("sendRequest", async (req, res, user_id) => {
-            await this.insert({
-                table: "user",
+            let other_id = parseInt(req.body.user_id);
+            let count = await this.insert({
+                table: "friend",
                 keys: [
-                    "username",
-                    "email",
-                    "avatar"
+                    "sender",
+                    "receiver"
                 ],
                 values: [
-                    un,
-                    req.body.email,
-                    avatar
+                    user_id,
+                    req.body.user_id,
                 ]
-            }, "*");
+            });
 
-            res.send({friends : friends.map(u => u.sender)});
+            if(count == 1) {
+                this.app.user_sync.friendState(user_id, other_id, "sent");
+                res.send({success});
+            } else {
+                res.send({err: "failed"})
+            }
+        });
+
+        this.addEntry("cancelRequest", async (req, res, user_id) => {
+            let other_id = parseInt(req.body.user_id);
+            let count = await this.delete({
+                from: "friend",
+                where : {
+                    keys: [[["sender", "receiver"], ["sender", "receiver"]], "accepted"],
+                    values: [user_id, other_id, other_id, user_id, false],
+                    op: ["AND", "OR", "AND", "AND"]
+                }
+            });
+
+            if(count == 1) {
+                this.app.user_sync.friendState(user_id, other_id, "canceled");
+                res.send({success});
+            } else {
+                res.send({err: "failed"})
+            }
+        });
+
+        this.addEntry("acceptRequest", async (req, res, user_id) => {
+            let other_id = parseInt(req.body.user_id);
+            let count = await this.update({
+                table: "friend",
+                cols: ["accepted"],
+                values: [true],
+                where: {
+                    keys: ["sender", "receiver", "accepted"],
+                    values: [other_id, user_id, false],
+                    op: ["AND", "AND"]
+                }
+            });
+
+            if(count == 1) {
+                this.app.user_sync.friendState(user_id, other_id, "accepted");
+                res.send({success});
+            } else {
+                res.send({err: "failed"})
+            }
         });
     }
 

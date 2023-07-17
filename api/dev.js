@@ -27,9 +27,12 @@ class Dev extends Route {
                 "import org.json.JSONObject;\n" +
                 "import org.luke.diminou.abs.utils.functional.ObjectConsumer;\n" +
                 "import org.luke.diminou.data.property.Property;\n\n" +
-                "public class " + className + " extends Bean {\n\t"+
+                "public class " + className + " extends Bean {\n\n\t"+
                 "public static void getForId(int id, ObjectConsumer<" + className + "> on" + className + ") {\n\t\t" +
                 "Bean.getForId(" + className + ".class, id, on" + className + ");\n\t" +
+                "}\n\n\t"+
+                "public static "+className+" getForIdSync(int id) {\n\t\t" +
+                "return Bean.getForIdSync(" + className + ".class, id);\n\t" +
                 "}\n\t";
 
             cols.forEach(col => {

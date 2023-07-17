@@ -81,7 +81,12 @@ class SocketListener {
     }
 
     async notify(user_id, change) {
-        this.emit(JSON.stringify(user_id), "user_sync", change);
+        this.emit(user_id.toString(), "user_sync", change);
+    }
+
+    async friendState(sender, receiver, state) {
+        this.emit(sender.toString(), "request_" + state, {sender, receiver});
+        this.emit(receiver.toString(), "request_" + state, {sender, receiver});
     }
 
     async emit(user_id, event, data) {
