@@ -16,6 +16,14 @@ class Random {
         return res;
     }
 
+    number(length) {
+        let res = "";
+        for (let i = 0; i < length; i++) {
+            res += numbers.charAt(parseInt(Math.random() * numbers.length));
+        }
+        return res;
+    }
+
     conf_code(length) {
         let res = "";
         for (let i = 0; i < length; i++) {

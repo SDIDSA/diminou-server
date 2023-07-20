@@ -4,6 +4,7 @@ const sharp = require("sharp");
 
 const success = { status: "success" };
 const bad_session = { status: "error", err: "bad_session" };
+const bad_room = { status: "error", err: "bad_room" };
 class Session extends Route {
     constructor(app) {
         super(app, "/session");
@@ -254,6 +255,65 @@ class Session extends Route {
                 res.send({err: "failed"})
             }
         });
+
+        this.addEntry("createGame", (req, res, user_id) => {
+            let game = this.app.user_sync.createGame(user_id);
+            res.send({game});
+        });
+
+        this.addEntry("endGame", (req, res) => {
+            let room_id = req.body.room_id;
+            
+            if(this.app.user_sync.endGame(room_id)) {
+                res.send(success);
+            }else {
+                res.send(bad_room);
+            }
+        })
+
+        this.addEntry("invite", (req, res, user_id) => {
+            let room_id = req.body.room_id;
+            let who = req.body.who;
+            
+            if(this.app.user_sync.invite(user_id, who, room_id)) {
+                res.send(success);
+            }else {
+                res.send(bad_room);
+            }
+        });
+
+        this.addEntry("join", (req, res, user_id) => {
+            let room_id = req.body.room_id;
+            
+            if(this.app.user_sync.join(user_id, room_id)) {
+                res.send(success);
+            }else {
+                res.send(bad_room);
+            }
+        });
+
+        this.addEntry("leave", (req, res) => {
+            let room_id = req.body.room_id;
+            let user_id = req.body.user_id;
+            
+            if(this.app.user_sync.leave(user_id, room_id)) {
+                res.send(success);
+            }else {
+                res.send(bad_room);
+            }
+        });
+
+        this.addEntry("swap", async (req, res) => {
+            let room_id = req.body.room_id;
+            let i1 = req.body.i1;
+            let i2 = req.body.i2;
+            
+            if(this.app.user_sync.swap(room_id, i1, i2)) {
+                res.send(success);
+            }else {
+                res.send(bad_room);
+            }
+        })
     }
 
     addEntry(name, handler) {
