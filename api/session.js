@@ -1,11 +1,10 @@
-const Route = require("./route.js");
+const AuthRoute = require("./authRoute.js");
 const Form = require('formidable').IncomingForm;
 const sharp = require("sharp");
 
 const success = { status: "success" };
-const bad_session = { status: "error", err: "bad_session" };
 const bad_room = { status: "error", err: "bad_room" };
-class Session extends Route {
+class Session extends AuthRoute {
     constructor(app) {
         super(app, "/session");
 
@@ -29,6 +28,7 @@ class Session extends Route {
             }
 
             if(type.toLowerCase() === "user") {
+                bean.online = this.app.user_sync.isOnline(bean.id);
                 if(user_id == bean.id) {
                     bean.friend = "self";
                 } else {
@@ -314,28 +314,16 @@ class Session extends Route {
                 res.send(bad_room);
             }
         })
-    }
 
-    addEntry(name, handler) {
-        super.addEntry(name, async(req, res) => {
-            let token = req.header("token");
-            try {
-                let user_id = (await this.select({
-                    select: ["user_id"],
-                    from: ["session"],
-                    where: {
-                        keys: ["token"],
-                        values: [token]
-                    }
-                }))[0].user_id;
-
-                handler(req, res, user_id, token);
-            } catch (err) {
-                res.send(bad_session);
+        this.addEntry("begin", async (req, res) => {
+            let room_id = req.body.room_id;
+            if(this.app.user_sync.begin(room_id)) {
+                res.send(success);
+            }else {
+                res.send(bad_room);
             }
         });
     }
-
 }
 
 module.exports = Session;

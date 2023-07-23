@@ -1,5 +1,7 @@
 var auth = require('./api/auth.js');
 var dev = require('./api/dev.js');
+var session = require('./api/session.js');
+var game = require('./api/game.js');
 
 var UserSync = require('./sockets/UserSync.js');
 
@@ -8,7 +10,6 @@ var db = require('./db/db.js');
 var express = require('express');
 var http = require('http');
 var { Server } = require("socket.io");
-const session = require('./api/session.js');
 const Media = require('./media/media.js');
 const Random = require('./utils/random.js');
 
@@ -34,6 +35,7 @@ app.get("/", (req, res) => {
 
 registerRoute(auth);
 registerRoute(session);
+registerRoute(game);
 registerRoute(dev);
 
 let user_sync = new UserSync(app);
