@@ -87,6 +87,58 @@ const pack = () => {
     return shuffle(copy);
 }
 
+const otherPlayer = (game, player) => {
+    return game.players[(game.players.indexOf(player) + 2) % 4];
+}
+
+const sumHand = (hand) => {
+    let sum = 0;
+
+    for(let i = 0; i < hand.length; i++) {
+        let p = hand[i];
+        sum += indexes.indexOf(p.split("_")[0]);
+        sum += indexes.indexOf(p.split("_")[1]);
+    }
+
+    return sum;
+}
+
+const scoreToAdd = (game, winner) => {
+    let sum = 0;
+
+    let windex = game.players.indexOf(winner);
+    let winners = [windex];
+
+    if(game.mode === "team_mode") {
+        winners.push((windex + 2) % 4);
+    }
+
+    for(let i = 0; i < 4; i++) {
+        if(winners.indexOf(i) == -1) {
+            sum += sumHand(game.hands[i]);
+        }
+    }
+    return sum;
+}
+
+const victory_data = (game, winner) => {
+    let data = { winner };
+    if(winner != -1) {
+        let toAdd = scoreToAdd(game, winner);
+
+        let scores = {}
+        scores[winner.toString()] = toAdd;
+        if(game.mode === "team_mode") {
+            scores[otherPlayer(game, winner).toString()] = toAdd;
+        }
+        data.scores = scores;
+    } else {
+        data.scores = {};
+    }
+    
+    return data;
+}
+
 class SocketListener {
     constructor(app) {
         this.app = app;
@@ -195,7 +247,7 @@ class SocketListener {
         return this.games.get(room_id);
     }
 
-    createGame(user_id) {
+    createGame(user_id, mode) {
         let room_id = this.app.random.number(6);
         //make sure the room_id is unique
         while (this.getGame(room_id)) {
@@ -204,6 +256,7 @@ class SocketListener {
 
         let game = {
             id: room_id,
+            mode: "unknown",
             state: "init",
             host: user_id,
             winner: -1,
@@ -325,11 +378,14 @@ class SocketListener {
         return true;
     }
 
-    begin(room) {
+    begin(room, mode) {
         let game = this.getGame(room);
-        if (!game || game.state !== "init") return false;
+        if (!game) return false;
+
+        game.mode = mode;
 
         game.state = "going";
+        game.table = [];
 
         game.stock = pack();
 
@@ -351,8 +407,8 @@ class SocketListener {
                     let p = game.stock[0];
                     game.stock.splice(0, 1);
                     toAdd.push(p);
-                    game.hands[i].push(p);
                 }
+                game.hands[i] = toAdd;
                 game.players.forEach(id => {
                     this.emit(id, "deal", { player, toAdd, stock: game.stock.length });
                 })
@@ -428,12 +484,69 @@ class SocketListener {
                     game.table.push(move.played);
                 }
 
-                let ni = i + 1;
-                if (ni >= 4 || game.players[ni] == -1) {
-                    ni = 0;
-                }
+                if (game.hands[i].length == 0) {
+                    game.winner = user;
+                    setTimeout(() => {
+                        game.players.forEach(id => {
+                            this.emit(id, "win", victory_data(game, user));
+                        })
+                    }, 500)
+                } else {
+                    //check for 9afla
+                    let canPlay = false;
+                    if(game.stock.length != 0) {
+                        canPlay
+                    }
+                    if(possible(game.table, game.stock) != 0) {
+                        canPlay = true;
+                    }
+                    for(let i = 0; i < 4 && !canPlay; i++) {
+                        let p = game.players[i];
+                        if(p != -1) {
+                            let hand = game.hands[i];
+                            if(possible(game.table, hand).length != 0) {
+                                canPlay = true;
+                            }
+                        }
+                    }
 
-                this.turn(game, ni);
+                    if(!canPlay) {
+                        let min = 999;
+                        let minI = -1;
+                        for(let i = 0; i < 4; i++) {
+                            if(game.players[i] != -1) {
+                                let sum = sumHand(game.hands[i]);
+                                if(sum < min) {
+                                    min = sum;
+                                    minI = i;
+                                }else if(sum == min) {
+                                    if(game.mode === "team_mode" && i % 2 == minI % 2 && minI != -1) {
+                                        min = sum;
+                                        minI = i;
+                                    }else {
+                                        min = sum;
+                                        minI = -1;
+                                    }
+                                }
+                            }
+                        }
+                        setTimeout(() => {
+                            let w = minI == -1 ? -1 : game.players[minI];
+                            game.winner = w;
+                            game.players.forEach(id => {
+                                this.emit(id, "win", victory_data(game, w));
+                            })
+                        }, 500)
+                    }else {
+                        let ni = i + 1;
+                        if (ni >= 4 || game.players[ni] == -1) {
+                            ni = 0;
+                        }
+    
+                        this.turn(game, ni);
+                    }
+
+                }
 
                 return true;
             }
@@ -477,6 +590,17 @@ class SocketListener {
                 this.turn(game, ni);
             }, 1500)
         }
+    }
+
+    cherra(room, user, icon, sound) {
+        let game = this.getGame(room);
+        if (!game || game.state !== "going") return false;
+
+        game.players.forEach(id => {
+            this.emit(id, "cherra", { player: user, icon, sound });
+        })
+        
+        return true;
     }
 
     async notify(user_id, change) {

@@ -317,7 +317,8 @@ class Session extends AuthRoute {
 
         this.addEntry("begin", async (req, res) => {
             let room_id = req.body.room_id;
-            if(this.app.user_sync.begin(room_id)) {
+            let mode = req.body.mode;
+            if(this.app.user_sync.begin(room_id, mode)) {
                 res.send(success);
             }else {
                 res.send(bad_room);

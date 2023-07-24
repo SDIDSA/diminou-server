@@ -27,6 +27,18 @@ class Game extends AuthRoute {
                 res.send(bad_room);
             }
         })
+
+        this.addEntry("cherra", async (req, res, user_id) => {
+            let room_id = req.body.room_id;
+            let icon = req.body.icon;
+            let sound = req.body.sound;
+
+            if(this.app.user_sync.cherra(room_id, user_id, icon, sound)) {
+                res.send(success);
+            } else {
+                res.send(bad_room);
+            }
+        })
     }
 }
 
